@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: asx-intel-api
+    runtime: python
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PRODUCTION
+        value: "true"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+    # Free tier — no disk (data resets on redeploy, GitHub Actions re-ingests daily)

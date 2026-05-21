@@ -1,0 +1,99 @@
+name: ASX Intel — Daily Pipeline
+
+# ── Schedule ──────────────────────────────────────────────────────────────────
+# AEST (UTC+10 in winter / UTC+11 in summer).  Times below are for AEST.
+# GitHub Actions cron uses UTC only, so AEDT runs (Oct–Apr) are 1 h earlier.
+# The backend already checks is_trading_day() and will no-op on weekends/holidays.
+#
+# UTC schedule (AEST = UTC+10):
+#   00:00 UTC → 10:00 AEST   morning open
+#   01:00 UTC → 11:00 AEST   hourly
+#   02:00 UTC → 12:00 AEST   hourly
+#   03:00 UTC → 13:00 AEST   hourly
+#   04:00 UTC → 14:00 AEST   hourly
+#   05:00 UTC → 15:00 AEST   hourly
+#   06:00 UTC → 16:00 AEST   hourly
+#   06:30 UTC → 16:30 AEST   EOD (final run)
+
+on:
+  schedule:
+    - cron: "0 0 * * 1-5"   # 10:00 AEST
+    - cron: "0 1 * * 1-5"   # 11:00 AEST
+    - cron: "0 2 * * 1-5"   # 12:00 AEST
+    - cron: "0 3 * * 1-5"   # 13:00 AEST
+    - cron: "0 4 * * 1-5"   # 14:00 AEST
+    - cron: "0 5 * * 1-5"   # 15:00 AEST
+    - cron: "0 6 * * 1-5"   # 16:00 AEST
+    - cron: "30 6 * * 1-5"  # 16:30 AEST — EOD
+
+  # Allow manual trigger from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      is_final:
+        description: "EOD run (is_final=true)?"
+        required: false
+        default: "false"
+
+jobs:
+  trigger-pipeline:
+    name: Trigger ASX pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determine run type
+        id: run_type
+        run: |
+          # Work out whether this is the EOD (16:30) run.
+          # GitHub sets GITHUB_EVENT_NAME; cron minute is in the cron expression.
+          # Simplest: check current UTC minute — 30 = EOD.
+          MINUTE=$(date -u +%M)
+          HOUR=$(date -u +%H)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            IS_FINAL="${{ github.event.inputs.is_final }}"
+          elif [[ "$HOUR" == "6" && "$MINUTE" == "30" ]]; then
+            IS_FINAL="true"
+          else
+            IS_FINAL="false"
+          fi
+          echo "is_final=$IS_FINAL" >> $GITHUB_OUTPUT
+          echo "Run type: is_final=$IS_FINAL (UTC $HOUR:$MINUTE)"
+
+      - name: Wake Render instance
+        run: |
+          echo "Pinging backend health check (Render free tier may be cold-starting)…"
+          # Retry up to 10 times with 15s delay = up to 2.5 min to wake up
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RENDER_API_URL }}/health" || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [[ "$STATUS" == "200" ]]; then
+              echo "Backend is up."
+              break
+            fi
+            echo "Not ready yet, waiting 15s…"
+            sleep 15
+          done
+          # Extra grace period — let the ASGI app fully initialise after the first 200
+          echo "Giving backend 20s to fully initialise…"
+          sleep 20
+
+      - name: Trigger full pipeline
+        run: |
+          IS_FINAL="${{ steps.run_type.outputs.is_final }}"
+          echo "Calling /pipeline/run?is_final=$IS_FINAL"
+          # Retry the pipeline trigger up to 3 times in case of transient 502
+          for attempt in 1 2 3; do
+            HTTP_STATUS=$(curl -s -o /tmp/pipeline_response.json -w "%{http_code}" \
+              -X POST \
+              -H "X-Pipeline-Secret: ${{ secrets.PIPELINE_SECRET }}" \
+              "${{ secrets.RENDER_API_URL }}/pipeline/run?is_final=$IS_FINAL")
+            echo "Attempt $attempt — HTTP status: $HTTP_STATUS"
+            cat /tmp/pipeline_response.json
+            if [[ "$HTTP_STATUS" == "200" ]]; then
+              echo "Pipeline started successfully."
+              exit 0
+            fi
+            echo "Got $HTTP_STATUS, retrying in 15s…"
+            sleep 15
+          done
+          echo "Pipeline trigger failed after 3 attempts."
+          exit 1

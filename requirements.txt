@@ -1,0 +1,41 @@
+# ASX Intel backend dependencies
+# Install with: pip install -r requirements.txt
+# Or with uv:   uv pip install -r requirements.txt
+
+# --- Web framework ---
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+
+# --- Database ---
+sqlalchemy>=2.0.30
+
+# --- HTTP + data ---
+httpx>=0.27.0
+requests>=2.32.0
+yfinance>=0.2.40
+pandas>=2.2.0
+
+# --- Config ---
+python-dotenv>=1.0.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# --- PDF parsing (optional but recommended) ---
+# PyMuPDF is fastest; pdfminer.six is a lighter fallback
+PyMuPDF>=1.24.0
+pdfminer.six>=20221105
+
+# --- HTML parsing ---
+beautifulsoup4>=4.12.0
+lxml>=5.2.0
+
+# --- LLM providers (install the one you need) ---
+openai>=1.35.0
+anthropic>=0.28.0
+# Google Gemini (free tier) — new SDK preferred, legacy kept as fallback
+google-genai>=0.3.0
+google-generativeai>=0.7.0
+
+# --- Scheduling ---
+apscheduler>=3.10.0
+pytz>=2024.1

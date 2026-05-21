@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0A1628;
+  --card: #111827;
+  --border: #1F2937;
+}
+
+body {
+  background-color: var(--bg);
+  color: #F9FAFB;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.card {
+  @apply bg-gray-900 border border-gray-800 rounded-xl p-4;
+}
+
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.up { @apply text-emerald-400; }
+.down { @apply text-red-400; }
+.neutral { @apply text-gray-400; }
