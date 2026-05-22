@@ -2,7 +2,7 @@ services:
   - type: web
     name: asx-intel-api
     runtime: python
-    rootDir: .
+    # App lives at the repo root in this standalone repo (no monorepo subdir)
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     envVars:

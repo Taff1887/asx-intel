@@ -21,3 +21,6 @@ frontend/.env.local
 
 # Logs
 *.log
+
+# TypeScript build cache
+*.tsbuildinfo

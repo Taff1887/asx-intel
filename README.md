@@ -56,7 +56,7 @@ asx_intel/
 ### 1. Install backend dependencies
 
 ```bash
-cd asx-intel
+cd applications/asx_intel
 
 # With pip
 pip install -r requirements.txt
@@ -86,7 +86,7 @@ npm install
 ### Backend (port 8000)
 
 ```bash
-# From the repo root (asx-intel/)
+# From applications/asx_intel/
 uvicorn backend.main:app --reload --port 8000
 ```
 

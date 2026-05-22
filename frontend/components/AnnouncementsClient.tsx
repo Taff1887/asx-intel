@@ -198,17 +198,26 @@ function AnnouncementSummary({
   async function generateAI() {
     setGenerating(true);
     setGenError(false);
-    try {
-      // Pass the live move so the AI can explain the actual market reaction
-      const q = displayPct != null ? `?move=${encodeURIComponent(displayPct)}` : "";
-      const res = await fetch(`${API_BASE}/announcements/${base!.id}/enrich${q}`, { method: "POST" });
-      if (!res.ok) throw new Error();
-      setAiData((await res.json()) as Announcement);
-    } catch {
-      setGenError(true);
-    } finally {
-      setGenerating(false);
+    // Pass the live move so the AI can explain the actual market reaction
+    const q = displayPct != null ? `?move=${encodeURIComponent(displayPct)}` : "";
+    const url = `${API_BASE}/announcements/${base!.id}/enrich${q}`;
+    // Render's free tier spins down when idle — the first request can fail or
+    // time out while it cold-starts (~30-60s). Retry a few times so the wake-up
+    // request kicks it off and a later attempt succeeds.
+    const delays = [0, 5000, 8000, 12000];
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (delays[attempt]) await new Promise((r) => setTimeout(r, delays[attempt]));
+      try {
+        const res = await fetch(url, { method: "POST" });
+        if (res.ok) {
+          setAiData((await res.json()) as Announcement);
+          setGenerating(false);
+          return;
+        }
+      } catch { /* network / cold-start — retry */ }
     }
+    setGenError(true);
+    setGenerating(false);
   }
 
   return (
@@ -310,7 +319,9 @@ function AnnouncementSummary({
                 </li>
               ))}
             </ul>
-            <p className="text-[10px] text-gray-600 mt-2">Reading the announcement PDF…</p>
+            <p className="text-[10px] text-gray-600 mt-2">
+              Reading the announcement PDF… the first summary can take up to a minute while the server wakes up.
+            </p>
           </div>
         ) : (
           <button
@@ -323,7 +334,7 @@ function AnnouncementSummary({
         )}
         {genError && (
           <p className="text-[10px] text-red-400/80 mt-1.5">
-            Couldn’t generate the summary — please try again in a moment.
+            Couldn’t generate the summary — the server may be waking up. Click Generate again in a moment.
           </p>
         )}
       </div>
