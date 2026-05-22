@@ -12,7 +12,7 @@ REM After running this, both will start automatically every time
 REM you log in to Windows. No cmd windows to open manually.
 REM ============================================================
 
-SET APP_DIR=C:\Users\Taffy Jackson\quantlab\applications\asx_intel
+SET APP_DIR=C:\Users\Taffy Jackson\repos\asx-intel
 SET PYTHON=python
 
 echo === ASX Intel Auto-Start Setup ===
