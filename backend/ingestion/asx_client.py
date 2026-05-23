@@ -53,6 +53,28 @@ _HEADERS = {
 }
 
 
+def _fetch_url(url: str, timeout: int = REQUEST_TIMEOUT, retries: int = 5):
+    """
+    GET a URL with retries. The ASX site intermittently returns 404/403
+    (anti-bot / rate-limiting) even for valid pages — a retry almost always
+    succeeds. Returns the httpx.Response on 200, else None.
+    """
+    import time
+    for attempt in range(1, retries + 1):
+        try:
+            with httpx.Client(timeout=timeout, headers=_HEADERS, follow_redirects=True) as client:
+                resp = client.get(url)
+            if resp.status_code == 200:
+                return resp
+            logger.warning("ASX %s → HTTP %s (attempt %d/%d)", url, resp.status_code, attempt, retries)
+        except Exception as exc:
+            logger.warning("ASX %s → error %s (attempt %d/%d)", url, exc, attempt, retries)
+        if attempt < retries:
+            time.sleep(2.0 * attempt)  # 2s, 4s, 6s, 8s backoff
+    logger.error("ASX %s failed after %d attempts", url, retries)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Company list (for name + sector lookup)
 # ---------------------------------------------------------------------------
@@ -68,10 +90,10 @@ def get_asx_company_list(force_refresh: bool = False) -> list[dict[str, str]]:
 
     logger.info("Downloading ASX company list from %s", ASX_COMPANY_LIST_URL)
     try:
-        with httpx.Client(timeout=30, headers=_HEADERS) as client:
-            resp = client.get(ASX_COMPANY_LIST_URL)
-            resp.raise_for_status()
-            content = resp.text
+        resp = _fetch_url(ASX_COMPANY_LIST_URL, timeout=30)
+        if resp is None:
+            raise RuntimeError("company list fetch failed after retries")
+        content = resp.text
 
         companies = _parse_company_csv(content)
         _write_company_cache(companies)
@@ -171,14 +193,11 @@ def fetch_announcements_for_date(target_date: date) -> list[dict[str, Any]]:
 
     logger.info("Fetching announcements from %s", url)
 
-    try:
-        with httpx.Client(timeout=REQUEST_TIMEOUT, headers=_HEADERS, follow_redirects=True) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-            html = resp.text
-    except Exception as exc:
-        logger.error("Failed to fetch announcements page: %s", exc)
+    resp = _fetch_url(url)
+    if resp is None:
+        logger.error("Failed to fetch announcements page after retries")
         return []
+    html = resp.text
 
     announcements = _parse_announcements_html(html, target_date, name_map, sector_map)
     logger.info("Parsed %d announcements for %s", len(announcements), target_date)
@@ -332,29 +351,25 @@ def fetch_announcement_document(source_url: str) -> bytes | None:
     """
     if not source_url:
         return None
-    try:
-        with httpx.Client(timeout=30, headers=_HEADERS, follow_redirects=True) as client:
-            resp = client.get(source_url)
-            resp.raise_for_status()
-            content = resp.content
-
-            # Direct PDF — done
-            if content[:5] == b"%PDF":
-                return content
-
-            # Terms-acceptance HTML page — extract the real PDF URL and fetch it
-            ctype = resp.headers.get("content-type", "").lower()
-            looks_html = "html" in ctype or content[:64].lstrip().lower().startswith(b"<html")
-            if looks_html:
-                real_url = _extract_real_pdf_url(resp.text)
-                if real_url:
-                    logger.info("Following ASX terms page → real PDF: %s", real_url)
-                    pdf_resp = client.get(real_url)
-                    pdf_resp.raise_for_status()
-                    return pdf_resp.content
-
-            # Fallback — return whatever we got (HTML parser will try its best)
-            return content
-    except Exception as exc:
-        logger.warning("Failed to download %s: %s", source_url, exc)
+    resp = _fetch_url(source_url, timeout=30)
+    if resp is None:
         return None
+    content = resp.content
+
+    # Direct PDF — done
+    if content[:5] == b"%PDF":
+        return content
+
+    # Terms-acceptance HTML page — extract the real PDF URL and fetch it (with retry)
+    ctype = resp.headers.get("content-type", "").lower()
+    looks_html = "html" in ctype or content[:64].lstrip().lower().startswith(b"<html")
+    if looks_html:
+        real_url = _extract_real_pdf_url(resp.text)
+        if real_url:
+            logger.info("Following ASX terms page → real PDF: %s", real_url)
+            pdf_resp = _fetch_url(real_url, timeout=30)
+            if pdf_resp is not None:
+                return pdf_resp.content
+
+    # Fallback — return whatever we got (HTML parser will try its best)
+    return content
