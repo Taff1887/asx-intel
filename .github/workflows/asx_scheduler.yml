@@ -17,7 +17,8 @@ name: ASX Intel — Daily Pipeline
 
 on:
   schedule:
-    - cron: "0 0 * * 1-5"   # 10:00 AEST
+    - cron: "0 0 * * 1-5"   # 10:00 AEST — ingest/classify/score (yfinance has no today data yet)
+    - cron: "15 0 * * 1-5"  # 10:15 AEST — price catch-up (yfinance now has major-stock bars)
     - cron: "0 1 * * 1-5"   # 11:00 AEST
     - cron: "0 2 * * 1-5"   # 12:00 AEST
     - cron: "0 3 * * 1-5"   # 13:00 AEST
