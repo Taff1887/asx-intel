@@ -1,0 +1,39 @@
+name: Render keep-alive
+
+# Render's free tier spins the backend down after ~15 min of inactivity, so the
+# first request after an idle period (e.g. opening the site on your phone over
+# the weekend) takes 30-60s to cold-start — and mobile browsers often give up.
+#
+# This workflow pings /health every 12 minutes during AEST 7am-11pm, 7 days a
+# week, keeping Render warm during the hours you might actually use the app.
+# Sleeps overnight (10pm AEST → 7am AEST) to stay comfortably within Render's
+# 750 monthly instance-hours.
+
+on:
+  schedule:
+    # Cron is UTC. AEST = UTC+10.
+    # AEST 7:00 → UTC 21:00  (previous day in UTC)
+    # AEST 23:00 → UTC 13:00
+    # → UTC hours 21-23 + 0-13 cover AEST 7am-11pm every day.
+    - cron: "*/12 21-23,0-13 * * *"
+
+  # Manual trigger (for testing)
+  workflow_dispatch:
+
+# No need to email me on failure for a ping job
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping backend /health
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake Render
+        run: |
+          # `|| true` so a transient hiccup never marks the job as failed
+          # (would otherwise send a notification email every time).
+          curl -s -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" \
+            --max-time 90 \
+            "${{ secrets.RENDER_API_URL }}/health" || true
