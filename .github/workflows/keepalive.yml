@@ -1,21 +1,16 @@
 name: Render keep-alive
 
-# Render's free tier spins the backend down after ~15 min of inactivity, so the
-# first request after an idle period (e.g. opening the site on your phone over
-# the weekend) takes 30-60s to cold-start — and mobile browsers often give up.
+# Render's free tier spins the backend down after ~15 min of inactivity, causing
+# 30-60s cold starts that make mobile loads feel broken. This workflow pings
+# /health every 10 minutes, 24/7, so the backend NEVER goes cold.
 #
-# This workflow pings /health every 12 minutes during AEST 7am-11pm, 7 days a
-# week, keeping Render warm during the hours you might actually use the app.
-# Sleeps overnight (10pm AEST → 7am AEST) to stay comfortably within Render's
-# 750 monthly instance-hours.
+# Render free tier = 750 instance-hours/month. Continuous use is 720h (30-day
+# month) to 744h (31-day month) — fits with ~6h safety margin even in May/Aug.
 
 on:
   schedule:
-    # Cron is UTC. AEST = UTC+10.
-    # AEST 7:00 → UTC 21:00  (previous day in UTC)
-    # AEST 23:00 → UTC 13:00
-    # → UTC hours 21-23 + 0-13 cover AEST 7am-11pm every day.
-    - cron: "*/12 21-23,0-13 * * *"
+    # Every 10 minutes, every hour, every day — well under Render's 15 min spin-down threshold
+    - cron: "*/10 * * * *"
 
   # Manual trigger (for testing)
   workflow_dispatch:
