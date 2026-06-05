@@ -334,12 +334,23 @@ def _rule_based_summary(text: str, metadata: dict[str, Any]) -> dict[str, Any]:
         "Dividend / Buyback":           f"Capital returns signal management confidence in {company}'s balance sheet.",
         "Regulatory / Legal":           f"Regulatory outcomes can materially affect {company}'s operations and risk profile.",
         "Management Change":            f"Leadership changes can shift strategic direction and investor confidence in {company}.",
+        "Appendix / Administrative":    f"Routine administrative filing from {company} — minimal direct market impact.",
+        "Investor Presentation":        f"Investor presentations distil {company}'s strategy and outlook; useful colour but rarely a catalyst.",
     }
     why = why_map.get(ann_type, f"{company} ({ticker}) made this announcement — monitor for follow-up market reaction.")
+
+    # Basic business overview — used as fallback when the LLM doesn't supply one.
+    # When Groq works it produces a much richer description; this guarantees the
+    # "About the company" line is never blank.
+    if sector:
+        business_overview = f"{company} ({ticker}) operates in the {sector} sector on the ASX."
+    else:
+        business_overview = f"{company} ({ticker}) is an ASX-listed company."
 
     return {
         "summary_short":    short,
         "summary_detailed": detailed,
+        "business_overview": business_overview,
         "why_it_matters":   why,
         "market_impact":    "",
         "key_numbers":      key_numbers,
